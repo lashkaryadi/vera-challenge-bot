@@ -173,7 +173,7 @@ def _is_repeated_message(conv: dict, text: str) -> bool:
     return False
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {"status": "ok", "message": "Vera Challenge Bot is running"}
 
@@ -213,6 +213,16 @@ def push_context(ctx: ContextPush):
                 "current_version": current_version,
             },
         )
+    # When merchant context is (re-)pushed, reset state for that merchant
+    if ctx.scope == "merchant":
+        mid = ctx.context_id
+        merchant_auto_reply_counts.pop(mid, None)
+        to_remove = {cid for cid in ended_conversations if mid in cid}
+        ended_conversations.difference_update(to_remove)
+        convs_to_remove = [cid for cid, c in conversations.items() if c.get("merchant_id") == mid]
+        for cid in convs_to_remove:
+            conversations.pop(cid, None)
+
     return ContextAck(
         accepted=True,
         ack_id=f"ack_{ctx.context_id}_v{ctx.version}",

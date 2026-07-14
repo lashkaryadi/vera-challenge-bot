@@ -35,7 +35,7 @@ class ContextStore:
         key = (scope, context_id)
         with self._lock:
             existing = self._data.get(key)
-            if existing is not None and existing["version"] >= version:
+            if existing is not None and existing["version"] > version:
                 return False, existing["version"]  # older or duplicate version -> no-op
             self._data[key] = {
                 "version": version,
