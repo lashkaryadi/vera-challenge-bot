@@ -152,6 +152,100 @@ def test_reply_objection():
     assert r.json()["action"] in {"send", "wait", "end"}
 
 
+def test_reply_auto_reply_escalation():
+    conv_id = "conv_auto_test"
+    auto_text = "Thank you for contacting Dr. Meera's Dental Clinic! Our team will respond shortly."
+
+    r1 = client.post("/v1/reply", json={
+        "conversation_id": conv_id, "merchant_id": "m_001_drmeera",
+        "from_role": "merchant", "message": auto_text, "turn_number": 2,
+    })
+    assert r1.status_code == 200
+    assert r1.json()["action"] == "send"
+
+    r2 = client.post("/v1/reply", json={
+        "conversation_id": conv_id, "merchant_id": "m_001_drmeera",
+        "from_role": "merchant", "message": auto_text, "turn_number": 3,
+    })
+    assert r2.status_code == 200
+    assert r2.json()["action"] == "wait"
+
+    r3 = client.post("/v1/reply", json={
+        "conversation_id": conv_id, "merchant_id": "m_001_drmeera",
+        "from_role": "merchant", "message": auto_text, "turn_number": 4,
+    })
+    assert r3.status_code == 200
+    assert r3.json()["action"] == "end"
+
+
+def test_reply_opt_out():
+    r = client.post("/v1/reply", json={
+        "conversation_id": "conv_opt_out", "merchant_id": "m_001_drmeera",
+        "from_role": "merchant", "message": "Not interested. Stop messaging me.",
+        "turn_number": 2,
+    })
+    assert r.status_code == 200
+    assert r.json()["action"] == "end"
+
+
+def test_reply_hostile():
+    r = client.post("/v1/reply", json={
+        "conversation_id": "conv_hostile", "merchant_id": "m_001_drmeera",
+        "from_role": "merchant", "message": "Why are you bothering me. This is useless.",
+        "turn_number": 2,
+    })
+    assert r.status_code == 200
+    assert r.json()["action"] == "end"
+
+
+def test_reply_delay_request():
+    r = client.post("/v1/reply", json={
+        "conversation_id": "conv_delay", "merchant_id": "m_001_drmeera",
+        "from_role": "merchant", "message": "I'm busy right now, call back later",
+        "turn_number": 2,
+    })
+    assert r.status_code == 200
+    assert r.json()["action"] == "wait"
+    assert r.json().get("wait_seconds", 0) > 0
+
+
+def test_tick_with_category_context():
+    cat = client.post("/v1/context", json={
+        "scope": "category", "context_id": "dentists", "version": 1,
+        "payload": {
+            "slug": "dentists",
+            "voice": {"tone": "peer_clinical", "taboos": ["cure", "guaranteed"]},
+            "peer_stats": {"avg_rating": 4.4, "avg_ctr": 0.030},
+            "digest": [{"id": "d1", "kind": "research", "title": "3-mo fluoride recall cuts caries 38%", "source": "JIDA Oct 2026, p.14"}],
+            "offer_catalog": [{"title": "Dental Cleaning @ ₹299", "value": "299"}],
+        },
+        "delivered_at": "2026-04-29T10:00:00Z",
+    })
+    assert cat.status_code == 200
+
+    trg = client.post("/v1/context", json={
+        "scope": "trigger", "context_id": "trg_research_001", "version": 1,
+        "payload": {
+            "id": "trg_research_001", "kind": "research_digest", "scope": "merchant",
+            "merchant_id": "m_001_drmeera",
+            "payload": {"category": "dentists", "top_item_id": "d1"},
+            "suppression_key": "research:dentists:2026-W17",
+        },
+        "delivered_at": "2026-04-29T10:00:00Z",
+    })
+    assert trg.status_code == 200
+
+    tick = client.post("/v1/tick", json={
+        "now": "2026-04-29T10:05:00Z",
+        "available_triggers": ["trg_research_001"],
+    })
+    assert tick.status_code == 200
+    actions = tick.json()["actions"]
+    assert len(actions) >= 1
+    assert actions[0]["body"]
+    assert actions[0]["send_as"] == "vera"
+
+
 def test_tick_missing_merchant_returns_404():
     r = client.post("/v1/tick", json={"merchant_id": "does_not_exist"})
     assert r.status_code == 404
@@ -164,5 +258,10 @@ if __name__ == "__main__":
     test_official_tick_path_and_duplicate_context()
     test_reply_yes()
     test_reply_objection()
+    test_reply_auto_reply_escalation()
+    test_reply_opt_out()
+    test_reply_hostile()
+    test_reply_delay_request()
+    test_tick_with_category_context()
     test_tick_missing_merchant_returns_404()
     print("\nAll local checks passed ✅")

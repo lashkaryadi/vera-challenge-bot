@@ -31,7 +31,7 @@ except ImportError:  # keeps the app importable even before `pip install` runs
 PROVIDER_CONFIG = {
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
-        "default_model": "llama-3.3-70b-versatile",
+        "default_model": "openai/gpt-oss-120b",
     },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -39,7 +39,7 @@ PROVIDER_CONFIG = {
     },
     "openrouter": {
         "base_url": "https://openrouter.ai/api/v1",
-        "default_model": "meta-llama/llama-3.3-70b-instruct:free",
+        "default_model": "openai/gpt-oss-120bt:free",
     },
 }
 
@@ -73,8 +73,8 @@ def generate_message(system_prompt: str, user_prompt: str, timeout: float = 12.0
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.4,
-            max_tokens=220,
+            temperature=0.3,
+            max_tokens=300,
             timeout=timeout,
         )
         text = resp.choices[0].message.content
